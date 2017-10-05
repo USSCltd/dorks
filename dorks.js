@@ -224,6 +224,8 @@ function GHDB()
 	var uri = 'https://www.exploit-db.com/google-hacking-database/'
 	var dorks = []
 	var filename = ''
+	var dork_descriptions = []
+	var need_to_extract_dorks = false
 	this.done = false
 	web_browser.viewportSize = { width: 1280, height: 800 }
 	web_browser.__this = this
@@ -265,22 +267,38 @@ function GHDB()
 				if( error = web_browser.evaluateJavaScript(	evaluate_code ) )
 					console.log(error)
 			}
+			else if(need_to_extract_dorks)
+			{
+				var uri,
+					dork = web_browser.evaluate( function() {
+					var a = document.getElementsByTagName('a')
+					for(var i = 0; i < a.length; i++)
+						if( a[i].getAttribute('target') == '_blank' && /google/.test( a[i].getAttribute('href') ) )
+							return a[i].innerHTML.replace(/&amp;/g, '&').replace(/(&quot;|&ldquo;|&rdquo;)/g, '"')
+									.replace(/&gt;/g, '>').replace(/&lt;/g, '<').trim()
+				} )
+				console.log( dork )
+				dorks.push( dork )
+				if( uri = dork_descriptions.pop() )
+					web_browser.open( uri )
+				else
+				{
+					if( filename )
+						fs.write( filename, dorks.join('\n'), 'w' )
+					web_browser.__this.done = true
+					exit()
+				}
+			}
 			else
 			{
 				var result = web_browser.evaluate( function() {
-					var dork,dorks = [], a = document.getElementsByTagName('a')
+					var uri,dork_descriptions = [], a = document.getElementsByTagName('a')
 					for( var i = 0; i < a.length; i++)
-						if( /\/ghdb\//.test( a[i].getAttribute('href') ) )
-						{
-							dork = a[i].innerHTML
-								.replace(/&amp;/g, '&').replace(/(&quot;|&ldquo;|&rdquo;)/g, '"')
-								.replace(/&gt;/g, '>').replace(/&lt;/g, '<')
-							dorks.push( dork )
-							console.log( dork )
-						}
-					return dorks
+						if( /\/ghdb\//.test( uri = a[i].getAttribute('href') ) )
+							dork_descriptions.push( uri )
+					return dork_descriptions
 				} )
-				dorks = dorks.concat( result )
+				dork_descriptions = dork_descriptions.concat( result )
 
 				var next_page = web_browser.evaluate( function() {
 					var href_results = [], a = document.getElementsByTagName('a')
@@ -292,10 +310,8 @@ function GHDB()
 					web_browser.open( next_page.replace(/\t/g, '') )
 				else
 				{
-					if( filename )
-						fs.write( filename, dorks.join('\n'), 'w' )
-					web_browser.__this.done = true
-					exit()
+					need_to_extract_dorks = true
+					web_browser.open( dork_descriptions.pop() )
 				}
 			}
 		}
